@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  # ─── PostgreSQL Database ──────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: orvex_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orvex
+      POSTGRES_PASSWORD: orvex_secret_2024
+      POSTGRES_DB: orvex_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - orvex_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orvex -d orvex_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  orvex_pgdata:
+    driver: local

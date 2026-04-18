@@ -1,13 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { LayoutDashboard, Plus, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navigation */}
@@ -15,14 +16,7 @@ export default function DashboardLayout({
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="flex items-center">
-              <Image
-                src="/logo.png"
-                alt="Orvex"
-                width={120}
-                height={32}
-                className="h-8 w-auto"
-                priority
-              />
+              <Image src="/logo.png" alt="Orvex" width={120} height={32} className="h-8 w-auto" priority />
             </Link>
             <nav className="hidden items-center gap-1 md:flex">
               <Link href="/dashboard">
@@ -40,17 +34,23 @@ export default function DashboardLayout({
             </nav>
           </div>
           <div className="flex items-center gap-2">
+            {user && (
+              <span className="hidden text-sm text-muted-foreground sm:inline">
+                {user.name}
+              </span>
+            )}
             <Link href="/">
-              <Button variant="ghost" size="sm">
-                View Public Page
-              </Button>
+              <Button variant="ghost" size="sm">View Public Page</Button>
             </Link>
-            <Link href="/login">
-              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign out</span>
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground"
+              onClick={logout}
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
           </div>
         </div>
       </header>

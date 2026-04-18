@@ -9,16 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { MultiImageUpload } from "@/components/multi-image-upload";
-import type { PaymentMethod } from "@/lib/types";
+import { createProof, uploadFiles, type PaymentMethod } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 
 interface UploadedImage {
   id: string;
@@ -29,18 +26,69 @@ interface UploadedImage {
 
 export default function CreateProofPage() {
   const router = useRouter();
+  const { token } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("paypal");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("PAYPAL");
   const [paymentScreenshots, setPaymentScreenshots] = useState<UploadedImage[]>([]);
   const [deliveryScreenshots, setDeliveryScreenshots] = useState<UploadedImage[]>([]);
+  const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!token) return;
     setIsSubmitting(true);
-    
-    // Simulate API call - in production, replace with actual submission
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    router.push("/dashboard");
+    setError("");
+
+    try {
+      const form = e.currentTarget;
+      const get = (id: string) => (form.querySelector(`#${id}`) as HTMLInputElement)?.value ?? "";
+
+      // 1. Upload images first
+      const paymentUrls = paymentScreenshots.length
+        ? await uploadFiles(paymentScreenshots.map((i) => i.file))
+        : [];
+      const deliveryUrls = deliveryScreenshots.length
+        ? await uploadFiles(deliveryScreenshots.map((i) => i.file))
+        : [];
+
+      // 2. Build payload
+      const payload: Record<string, unknown> = {
+        productName: get("productName"),
+        description: get("description") || undefined,
+        amount: parseFloat(get("amount")),
+        paymentMethod,
+        paymentScreenshots: paymentUrls.map((url, i) => ({
+          url,
+          caption: paymentScreenshots[i]?.caption || undefined,
+        })),
+        deliveryScreenshots: deliveryUrls.map((url, i) => ({
+          url,
+          caption: deliveryScreenshots[i]?.caption || undefined,
+        })),
+      };
+
+      if (paymentMethod === "PAYPAL") {
+        payload.customerPayPalEmail = get("paypalEmail");
+        payload.payPalName = get("paypalName");
+        payload.transactionId = get("transactionId");
+        payload.discordName = get("discordName") || undefined;
+        payload.discordAlias = get("discordAlias") || undefined;
+        payload.discordId = get("discordId") || undefined;
+      } else if (paymentMethod === "CASHAPP") {
+        payload.cashtag = get("cashtag");
+        payload.customerName = get("cashappName");
+      } else if (paymentMethod === "BANK") {
+        payload.bankName = get("bankName");
+        payload.accountLast4 = get("accountLast4");
+        payload.customerName = get("bankCustomerName");
+      }
+
+      await createProof(payload, token);
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err?.message || "Failed to create proof. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -54,11 +102,13 @@ export default function CreateProofPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Create Proof</h1>
-          <p className="text-sm text-muted-foreground">
-            Add a new payment and delivery proof record
-          </p>
+          <p className="text-sm text-muted-foreground">Add a new payment and delivery proof record</p>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Product Information */}
@@ -74,27 +124,16 @@ export default function CreateProofPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Brief description of the product or service"
-                rows={3}
-              />
+              <Textarea id="description" placeholder="Brief description of the product or service" rows={3} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="amount">Amount (USD)</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                required
-              />
+              <Input id="amount" type="number" step="0.01" min="0" placeholder="0.00" required />
             </div>
           </CardContent>
         </Card>
 
-        {/* Payment Method Selection */}
+        {/* Payment Method */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payment Method</CardTitle>
@@ -102,26 +141,22 @@ export default function CreateProofPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="paymentMethod">Payment Method</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-              >
+              <Label>Payment Method</Label>
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="paypal">PayPal</SelectItem>
-                  <SelectItem value="cashapp">CashApp</SelectItem>
-                  <SelectItem value="bank">Bank Transfer</SelectItem>
+                  <SelectItem value="PAYPAL">PayPal</SelectItem>
+                  <SelectItem value="CASHAPP">CashApp</SelectItem>
+                  <SelectItem value="BANK">Bank Transfer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <Separator />
 
-            {/* PayPal Fields */}
-            {paymentMethod === "paypal" && (
+            {paymentMethod === "PAYPAL" && (
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -156,8 +191,7 @@ export default function CreateProofPage() {
               </div>
             )}
 
-            {/* CashApp Fields */}
-            {paymentMethod === "cashapp" && (
+            {paymentMethod === "CASHAPP" && (
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -172,8 +206,7 @@ export default function CreateProofPage() {
               </div>
             )}
 
-            {/* Bank Fields */}
-            {paymentMethod === "bank" && (
+            {paymentMethod === "BANK" && (
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -182,13 +215,7 @@ export default function CreateProofPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="accountLast4">Account Last 4 Digits</Label>
-                    <Input
-                      id="accountLast4"
-                      placeholder="1234"
-                      maxLength={4}
-                      pattern="[0-9]{4}"
-                      required
-                    />
+                    <Input id="accountLast4" placeholder="1234" maxLength={4} pattern="[0-9]{4}" required />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -214,9 +241,7 @@ export default function CreateProofPage() {
               onChange={setPaymentScreenshots}
               maxImages={5}
             />
-
             <Separator />
-
             <MultiImageUpload
               label="Delivery Screenshots"
               description="Screenshots proving the product was delivered"
@@ -230,19 +255,12 @@ export default function CreateProofPage() {
         {/* Submit */}
         <div className="flex items-center justify-end gap-4">
           <Link href="/dashboard">
-            <Button type="button" variant="outline">
-              Cancel
-            </Button>
+            <Button type="button" variant="outline">Cancel</Button>
           </Link>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              "Create Proof"
-            )}
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</>
+            ) : "Create Proof"}
           </Button>
         </div>
       </form>

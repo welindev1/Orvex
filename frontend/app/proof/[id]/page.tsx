@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getProofById } from "@/lib/data";
-import { getCustomerName, getTransactionIdentifier } from "@/lib/types";
-import { ImageGallery } from "@/components/image-gallery";
+import {
+  fetchProofById, getCustomerName, getTransactionIdentifier, formatPaymentMethod,
+} from "@/lib/api";
+import { RealImageGallery } from "@/components/real-image-gallery";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ?? 'http://localhost:3001';
 
 export default async function ProofDetailPage({
   params,
@@ -16,42 +19,32 @@ export default async function ProofDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const proof = getProofById(id);
 
-  if (!proof) {
+  let proof;
+  try {
+    proof = await fetchProofById(id);
+  } catch {
     notFound();
   }
 
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
+  const formatAmount = (amount: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatTime = (dateString: string) =>
+    new Date(dateString).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-  const formatPaymentMethod = (method: string) => {
-    const labels: Record<string, string> = {
-      paypal: "PayPal",
-      cashapp: "CashApp",
-      bank: "Bank Transfer",
-    };
-    return labels[method] || method;
-  };
+  // Resolve full image URLs
+  const paymentImages = proof.paymentScreenshots.map((img) => ({
+    ...img,
+    url: `${API_BASE}${img.url}`,
+  }));
+  const deliveryImages = proof.deliveryScreenshots.map((img) => ({
+    ...img,
+    url: `${API_BASE}${img.url}`,
+  }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -59,19 +52,10 @@ export default async function ProofDetailPage({
       <header className="border-b bg-card">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center">
-            <Image
-              src="/logo.png"
-              alt="Orvex"
-              width={120}
-              height={32}
-              className="h-8 w-auto"
-              priority
-            />
+            <Image src="/logo.png" alt="Orvex" width={120} height={32} className="h-8 w-auto" priority />
           </Link>
           <Link href="/login">
-            <Button variant="ghost" size="sm">
-              Admin Login
-            </Button>
+            <Button variant="ghost" size="sm">Admin Login</Button>
           </Link>
         </div>
       </header>
@@ -93,15 +77,15 @@ export default async function ProofDetailPage({
             )}
           </div>
           <Badge
-            variant={proof.status === "completed" ? "default" : "outline"}
+            variant={proof.status === "COMPLETED" ? "default" : "outline"}
             className={
-              proof.status === "completed"
+              proof.status === "COMPLETED"
                 ? "shrink-0 bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
                 : "shrink-0 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-50"
             }
           >
-            {proof.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-            {proof.status}
+            {proof.status === "COMPLETED" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+            {proof.status === "COMPLETED" ? "Completed" : "Pending"}
           </Badge>
         </div>
 
@@ -126,7 +110,7 @@ export default async function ProofDetailPage({
                 <span className="text-sm text-muted-foreground">Transaction ID</span>
                 <span className="font-mono text-sm">{getTransactionIdentifier(proof)}</span>
               </div>
-              {proof.paymentMethod === "bank" && (
+              {proof.paymentMethod === "BANK" && (
                 <>
                   <Separator />
                   <div className="flex justify-between">
@@ -148,7 +132,7 @@ export default async function ProofDetailPage({
                 <span className="text-sm text-muted-foreground">Name</span>
                 <span className="font-medium">{getCustomerName(proof)}</span>
               </div>
-              {proof.paymentMethod === "paypal" && (
+              {proof.paymentMethod === "PAYPAL" && (
                 <>
                   <Separator />
                   <div className="flex justify-between">
@@ -166,7 +150,7 @@ export default async function ProofDetailPage({
                   )}
                 </>
               )}
-              {proof.paymentMethod === "cashapp" && (
+              {proof.paymentMethod === "CASHAPP" && (
                 <>
                   <Separator />
                   <div className="flex justify-between">
@@ -186,25 +170,30 @@ export default async function ProofDetailPage({
               <CardTitle className="text-base">Payment Screenshots</CardTitle>
             </CardHeader>
             <CardContent>
-              <ImageGallery 
-                images={proof.paymentScreenshots} 
-                emptyMessage="No payment screenshots uploaded"
-              />
+              <RealImageGallery images={paymentImages} emptyMessage="No payment screenshots uploaded" />
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Delivery Screenshots</CardTitle>
             </CardHeader>
             <CardContent>
-              <ImageGallery 
-                images={proof.deliveryScreenshots} 
-                emptyMessage="No delivery screenshots uploaded yet"
-              />
+              <RealImageGallery images={deliveryImages} emptyMessage="No delivery screenshots uploaded yet" />
             </CardContent>
           </Card>
         </div>
+
+        {/* Delivery Note */}
+        {proof.deliveryNote && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Delivery Note</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{proof.deliveryNote}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Timeline */}
         <Card className="mt-6">
@@ -237,16 +226,14 @@ export default async function ProofDetailPage({
                   </div>
                 </div>
               )}
-              {proof.status === "completed" && (
+              {proof.status === "COMPLETED" && (
                 <div className="flex items-start gap-4">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-emerald-700">Delivery Completed</p>
-                    <p className="text-sm text-muted-foreground">
-                      Product successfully delivered to customer
-                    </p>
+                    <p className="text-sm text-muted-foreground">Product successfully delivered to customer</p>
                   </div>
                 </div>
               )}

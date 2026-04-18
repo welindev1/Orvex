@@ -1,0 +1,104 @@
+// Orvex - Digital Delivery Proof Management
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ─── Proofs ──────────────────────────────────────────────
+
+enum PaymentMethod {
+  PAYPAL
+  CASHAPP
+  BANK
+}
+
+enum ProofStatus {
+  PENDING
+  COMPLETED
+}
+
+model Proof {
+  id          String  @id @default(uuid())
+  productName String  @map("product_name")
+  description String?
+
+  amount        Float
+  status        ProofStatus   @default(PENDING)
+  paymentMethod PaymentMethod @map("payment_method")
+
+  // ── PayPal fields ──
+  customerPayPalEmail String? @map("customer_paypal_email")
+  payPalName          String? @map("paypal_name")
+  transactionId       String? @map("transaction_id")
+  discordName         String? @map("discord_name")
+  discordAlias        String? @map("discord_alias")
+  discordId           String? @map("discord_id")
+
+  // ── CashApp fields ──
+  cashtag      String?
+  customerName String? @map("customer_name")
+
+  // ── Bank fields ──
+  bankName     String? @map("bank_name")
+  accountLast4 String? @map("account_last4")
+
+  // ── Delivery note ──
+  deliveryNote String? @map("delivery_note")
+
+  // ── Relations ──
+  paymentScreenshots  ProofImage[] @relation("PaymentScreenshots")
+  deliveryScreenshots ProofImage[] @relation("DeliveryScreenshots")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("proofs")
+}
+
+enum ImageType {
+  PAYMENT
+  DELIVERY
+}
+
+model ProofImage {
+  id        String    @id @default(uuid())
+  url       String
+  caption   String?
+  type      ImageType
+  sortOrder Int       @default(0) @map("sort_order")
+
+  // ── Relations ──
+  paymentProof   Proof?  @relation("PaymentScreenshots", fields: [paymentProofId], references: [id], onDelete: Cascade)
+  paymentProofId String? @map("payment_proof_id")
+
+  deliveryProof   Proof?  @relation("DeliveryScreenshots", fields: [deliveryProofId], references: [id], onDelete: Cascade)
+  deliveryProofId String? @map("delivery_proof_id")
+
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@map("proof_images")
+}
