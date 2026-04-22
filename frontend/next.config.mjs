@@ -5,6 +5,13 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.up.railway.app',
+        pathname: '/uploads/**',
+      },
+    ],
   },
 }
 

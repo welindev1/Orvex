@@ -37,8 +37,8 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  const port = configService.get<number>('PORT', 3001);
-  await app.listen(port);
-  console.log(`🚀 Orvex API running on http://localhost:${port}`);
+  const port = process.env.PORT || configService.get<number>('PORT', 3001);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Orvex API running on port ${port}`);
 }
 bootstrap();
