@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "npx prisma db push && node dist/main",
+    "startCommand": "npx prisma db push && node dist/src/main",
     "healthcheckPath": "/api",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
